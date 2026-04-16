@@ -22,7 +22,7 @@ const scaleChords = {
   'G': ['G', 'Am', 'Bm', 'C', 'D', 'Em', 'D7'],
   'Gm': ['Gm', 'Bb', 'Cm', 'Dm', 'Eb', 'F', 'D'],
   'Ab': ['Ab', 'Bbm', 'Cm', 'Db', 'Eb', 'Fm'],
-  'G#m': ['G#m', 'B', 'C#m', 'D#m', 'E', 'F#', 'D#'],
+  'Abm': ['Abm', 'B', 'C#m', 'D#m', 'E', 'F#', 'D#'],
   'A': ['A', 'Bm', 'C#m', 'D', 'E', 'F#m', 'E7'],
   'Am': ['Am', 'C', 'Dm', 'Em', 'F', 'G', 'E'],
   'Bb': ['Bb', 'Cm', 'Dm', 'Eb', 'F', 'Gm', 'F7'],
@@ -33,21 +33,35 @@ const scaleChords = {
 
 const defaultChords = ['C', 'D', 'E', 'F', 'G', 'A', 'B', 'Cm', 'Dm', 'Em', 'Fm', 'Gm', 'Am', 'Bm'];
 
+const emptyCell = () => ({ chord: '', repeatStart: false, repeatEnd: false });
+
 const defaultSections = [
-  { id: '1', name: 'Intro', rows: [['', '', '', '']] },
-  { id: '2', name: 'Chorus', rows: [['', '', '', '']] },
-  { id: '3', name: 'Inter', rows: [['', '', '', '']] },
-  { id: '4', name: 'Verse', rows: [['', '', '', '']] },
+  { id: '1', name: 'Intro', rows: [[emptyCell(), emptyCell(), emptyCell(), emptyCell()]] },
+  { id: '2', name: 'Chorus', rows: [[emptyCell(), emptyCell(), emptyCell(), emptyCell()]] },
+  { id: '3', name: 'Inter', rows: [[emptyCell(), emptyCell(), emptyCell(), emptyCell()]] },
+  { id: '4', name: 'Verse', rows: [[emptyCell(), emptyCell(), emptyCell(), emptyCell()]] },
 ];
 
 export default function App() {
   const [songName, setSongName] = useState(() => localStorage.getItem('chordBox_songName') || '');
   const [songScale, setSongScale] = useState(() => localStorage.getItem('chordBox_songScale') || '');
+  const [timeSignature, setTimeSignature] = useState(() => localStorage.getItem('chordBox_timeSig') || '');
+
   const [sections, setSections] = useState(() => {
     const saved = localStorage.getItem('chordBox_sections');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        let parsed = JSON.parse(saved);
+        // Migration from old string format
+        return parsed.map(sec => ({
+          ...sec,
+          rows: sec.rows.map(row =>
+            row.map(cell => typeof cell === 'string'
+              ? { chord: cell, repeatStart: false, repeatEnd: false }
+              : cell
+            )
+          )
+        }));
       } catch (e) {
         return defaultSections;
       }
@@ -59,7 +73,7 @@ export default function App() {
   const [isCapturing, setIsCapturing] = useState(false);
   const printRef = useRef(null);
 
-  // Sync to local storage on changes
+  // Sync states to local storage
   useEffect(() => {
     localStorage.setItem('chordBox_songName', songName);
   }, [songName]);
@@ -67,6 +81,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('chordBox_songScale', songScale);
   }, [songScale]);
+
+  useEffect(() => {
+    localStorage.setItem('chordBox_timeSig', timeSignature);
+  }, [timeSignature]);
 
   useEffect(() => {
     localStorage.setItem('chordBox_sections', JSON.stringify(sections));
@@ -78,13 +96,26 @@ export default function App() {
       const newRows = [...sec.rows];
       newRows[rowIndex] = [...newRows[rowIndex]];
 
-      // Auto-capitalize first letter if typing manually
       let formattedValue = value;
       if (value.length === 1) {
         formattedValue = value.toUpperCase();
       }
 
-      newRows[rowIndex][colIndex] = formattedValue;
+      newRows[rowIndex][colIndex] = { ...newRows[rowIndex][colIndex], chord: formattedValue };
+      return { ...sec, rows: newRows };
+    }));
+  };
+
+  const toggleRepeat = (sectionId, rowIndex, colIndex, type) => {
+    setSections(prev => prev.map(sec => {
+      if (sec.id !== sectionId) return sec;
+      const newRows = [...sec.rows];
+      newRows[rowIndex] = [...newRows[rowIndex]];
+
+      newRows[rowIndex][colIndex] = {
+        ...newRows[rowIndex][colIndex],
+        [type]: !newRows[rowIndex][colIndex][type]
+      };
       return { ...sec, rows: newRows };
     }));
   };
@@ -92,7 +123,7 @@ export default function App() {
   const addRow = (sectionId) => {
     setSections(prev => prev.map(sec => {
       if (sec.id !== sectionId) return sec;
-      return { ...sec, rows: [...sec.rows, ['', '', '', '']] };
+      return { ...sec, rows: [...sec.rows, [emptyCell(), emptyCell(), emptyCell(), emptyCell()]] };
     }));
   };
 
@@ -100,8 +131,7 @@ export default function App() {
     setSections(prev => prev.map(sec => {
       if (sec.id !== sectionId) return sec;
       const newRows = sec.rows.filter((_, i) => i !== rowIndex);
-      // Ensure at least one row remains
-      return { ...sec, rows: newRows.length > 0 ? newRows : [['', '', '', '']] };
+      return { ...sec, rows: newRows.length > 0 ? newRows : [[emptyCell(), emptyCell(), emptyCell(), emptyCell()]] };
     }));
   };
 
@@ -114,7 +144,7 @@ export default function App() {
 
   const addNewSection = () => {
     const newId = Date.now().toString();
-    setSections(prev => [...prev, { id: newId, name: 'New Part', rows: [['', '', '', '']] }]);
+    setSections(prev => [...prev, { id: newId, name: 'New Part', rows: [[emptyCell(), emptyCell(), emptyCell(), emptyCell()]] }]);
     toast.success("New section added successfully!");
   };
 
@@ -122,6 +152,7 @@ export default function App() {
     if (window.confirm("Are you sure you want to clear all chords and start over?")) {
       setSongName('');
       setSongScale('');
+      setTimeSignature('');
       setSections(defaultSections);
       toast.success("All fields have been cleared!");
     }
@@ -165,132 +196,191 @@ export default function App() {
     ? scaleChords[songScale]
     : defaultChords;
 
+  // Active cell data helper
+  const getActiveCellData = () => {
+    if (!activeCell) return null;
+    const sec = sections.find(s => s.id === activeCell.sec);
+    if (!sec) return null;
+    return sec.rows[activeCell.r][activeCell.c];
+  };
+
+  // Calculate dynamic sizing for precise A4 print mapping
+  const numValidSecs = sections.filter(sec => sec.rows.some(r => r.some(c => c.chord?.trim() !== ''))).length;
+  const numValidRows = sections.reduce((acc, sec) => {
+    const hasChords = sec.rows.some(r => r.some(c => c.chord?.trim() !== ''));
+    return acc + (hasChords ? sec.rows.length : 0);
+  }, 0);
+
+  // A4 exact bounds calculation (Strict 1123px constraint math)
+  // Header + Footer footprint minimized drastically: 1123 - (Top/Bot paddings 48px) - (Header 80px) - (Footer 30px) = 965px raw available. We use 940 for safety.
+  // Section titles: 18px font + 8px margin = ~30px vertical footprint.
+  const availableHeight = 940 - (numValidSecs * 30);
+  const idealTotalRowSpace = availableHeight / (numValidRows || 1);
+
+  // Calculate Box Height dynamically leaving room for gaps. Max 75% of space goes to box, 25% to gaps.
+  let calculatedBoxHeight = Math.floor(idealTotalRowSpace * 0.75);
+  calculatedBoxHeight = Math.max(12, Math.min(72, calculatedBoxHeight));
+
+  const printBoxHeight = `${calculatedBoxHeight}px`;
+  const printTextSize = `${Math.max(10, Math.floor(calculatedBoxHeight * 0.45))}px`;
+  // Vertical column gap
+  const printGap = `${Math.max(4, Math.floor(idealTotalRowSpace * 0.15))}px`;
+  // Margins between sections
+  const printMb = `${Math.max(12, Math.floor(idealTotalRowSpace * 0.3))}px`;
+
   return (
     <div className="min-h-screen bg-slate-100 flex justify-center font-sans sm:py-6 relative">
       <Toaster position="top-center" />
 
       {/* Main Interactive App Container */}
       <div
-        className="w-full max-w-md md:max-w-3xl bg-white sm:rounded-[2rem] sm:shadow-2xl relative flex flex-col border-slate-200 border-t-0 sm:border-8 min-h-screen sm:min-h-[90vh] overflow-hidden"
+        className="w-full max-w-md md:max-w-3xl bg-white sm:rounded-[2rem] sm:shadow-2xl relative flex flex-col border-slate-200 border-t-0 sm:border-8 h-screen sm:h-[90vh] overflow-hidden"
       >
-        {/* Header */}
-        <header className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white pt-10 pb-5 px-6 rounded-b-3xl shadow-lg relative z-10 shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Music size={24} className="text-blue-100" />
-              <h1 className="text-2xl font-extrabold tracking-tight">ChordBox</h1>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={handleClear} disabled={isCapturing} className="p-2 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all text-white" title="Clear All">
-                <Eraser size={18} />
-              </button>
-              <button onClick={handleSave} disabled={isCapturing} className="p-2 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all text-white disabled:opacity-50" title="Save as JPG">
-                <Save size={18} />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-3">
-            <input
-              type="text"
-              placeholder="Song Title..."
-              value={songName}
-              onChange={(e) => setSongName(e.target.value)}
-              className="flex-1 bg-black/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder:text-white/60 focus:outline-none focus:bg-white/20 focus:border-white/40 transition-all font-medium text-lg shadow-inner min-w-0"
-            />
-
-            <div className="relative shrink-0">
-              <select
-                value={songScale}
-                onChange={(e) => setSongScale(e.target.value)}
-                className="w-full md:w-32 bg-black/10 border border-white/20 rounded-xl px-2 py-3 text-white focus:outline-none focus:bg-white/20 focus:border-white/40 transition-all font-bold text-lg shadow-inner appearance-none text-center cursor-pointer h-full"
-              >
-                <option value="" className="text-slate-800 font-normal">Scale</option>
-                {Object.keys(scaleChords).map(k => (
-                  <option key={k} value={k} className="text-slate-800 font-bold">{k}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </header>
-
-        {/* Content Body */}
+        {/* Content Body wrapper that handles all scrolling */}
         <div
-          className="flex-1 px-4 md:px-8 py-6 space-y-6 scroll-smooth overflow-y-auto pb-40"
+          className="flex-1 scroll-smooth overflow-y-auto pb-48 flex flex-col"
           onClick={() => setActiveCell(null)}
         >
-          {sections.map((section) => (
-            <div key={section.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:p-6 shadow-sm relative group" onClick={e => e.stopPropagation()}>
-              {/* Section Header */}
-              <div className="flex justify-between items-center mb-4">
-                <input
-                  value={section.name}
-                  onChange={(e) => updateSectionName(section.id, e.target.value)}
-                  className="font-bold text-slate-800 text-lg md:text-xl bg-transparent outline-none w-32 md:w-48 focus:border-b-2 focus:border-indigo-500 transition-colors"
-                />
-                
-                <button
-                  onClick={() => addRow(section.id)}
-                  className="text-indigo-600 bg-indigo-100 hover:bg-indigo-200 px-3 py-1.5 rounded-lg text-sm md:text-base font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
-                >
-                  <Plus size={16} strokeWidth={3} /> Add Row
+          {/* Header (Now inside the scroller so it scrolls with the page) */}
+          <header className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white pt-10 pb-5 px-4 md:px-6 rounded-b-3xl shadow-lg relative z-10 shrink-0">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Music size={24} className="text-blue-100" />
+                <h1 className="text-2xl font-extrabold tracking-tight">ChordBox</h1>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleClear} disabled={isCapturing} className="p-2 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all text-white" title="Clear All">
+                  <Eraser size={18} />
+                </button>
+                <button onClick={handleSave} disabled={isCapturing} className="p-2 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-all text-white disabled:opacity-50" title="Save as JPG">
+                  <Save size={18} />
                 </button>
               </div>
+            </div>
 
-              {/* Grid of Boxes */}
-              <div className="space-y-3 md:space-y-4">
-                {section.rows.map((row, rIndex) => (
-                  <div key={rIndex} className="flex gap-2 md:gap-4 items-center relative w-full">
-                    <div className="grid grid-cols-4 gap-2 md:gap-4 flex-1">
-                      {row.map((chord, cIndex) => {
-                        const isActive = activeCell?.sec === section.id && activeCell?.r === rIndex && activeCell?.c === cIndex;
-                        return (
-                          <div key={cIndex} className="relative w-full pt-[100%] sm:pt-0 sm:h-24 md:h-28">
-                            <input
-                              value={chord}
-                              onFocus={() => setActiveCell({ sec: section.id, r: rIndex, c: cIndex })}
-                              onChange={(e) => updateChord(section.id, rIndex, cIndex, e.target.value)}
-                              className={`absolute inset-0 w-full h-full text-center text-xl sm:text-2xl md:text-3xl font-black rounded-xl border-2 outline-none transition-all shadow-inner bg-white ${isActive ? 'border-indigo-500 ring-4 ring-indigo-500/20 text-indigo-700' : 'border-slate-200 focus:border-indigo-400 text-slate-700'} placeholder:text-slate-300 placeholder:font-normal`}
-                              maxLength={7}
-                              placeholder="-"
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
+            <div className="flex flex-col md:flex-row gap-3">
+              <input
+                type="text"
+                placeholder="Song Title..."
+                value={songName}
+                onChange={(e) => setSongName(e.target.value)}
+                className="flex-1 bg-black/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder:text-white/60 focus:outline-none focus:bg-white/20 focus:border-white/40 transition-all font-medium text-lg shadow-inner min-w-0"
+              />
 
-                    {/* Delete Row Button */}
-                    <div className="w-8 md:w-10 flex justify-center shrink-0">
-                      {section.rows.length > 1 ? (
-                        <button
-                          onClick={() => removeRow(section.id, rIndex)}
-                          className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 md:p-3 rounded-full transition-colors"
-                          title="Delete Row"
-                        >
-                          <Trash2 size={20} className="md:w-6 md:h-6" />
-                        </button>
-                      ) : (
-                        <div className="w-8 md:w-10"></div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="flex gap-2 shrink-0">
+                <select
+                  value={songScale}
+                  onChange={(e) => setSongScale(e.target.value)}
+                  className="flex-1 md:w-28 bg-black/10 border border-white/20 rounded-xl px-2 py-3 text-white focus:outline-none focus:bg-white/20 focus:border-white/40 transition-all font-bold text-lg shadow-inner appearance-none text-center cursor-pointer h-full"
+                >
+                  <option value="" className="text-slate-800 font-normal">Key</option>
+                  {Object.keys(scaleChords).map(k => (
+                    <option key={k} value={k} className="text-slate-800 font-bold">{k}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={timeSignature}
+                  onChange={(e) => setTimeSignature(e.target.value)}
+                  className="flex-1 md:w-24 bg-black/10 border border-white/20 rounded-xl px-2 py-3 text-white focus:outline-none focus:bg-white/20 focus:border-white/40 transition-all font-bold text-lg shadow-inner appearance-none text-center cursor-pointer h-full"
+                >
+                  <option value="" className="text-slate-800 font-normal">Time</option>
+                  {['2/4', '3/4', '4/4', '6/8'].map(k => (
+                    <option key={k} value={k} className="text-slate-800 font-bold">{k}</option>
+                  ))}
+                </select>
               </div>
             </div>
-          ))}
+          </header>
 
-          {/* Add Section Button */}
-          <div className="pt-2 md:pt-4" onClick={e => e.stopPropagation()}>
-            <button
-              onClick={addNewSection}
-              className="w-full border-2 border-dashed border-slate-300 hover:border-indigo-400 text-slate-500 hover:text-indigo-600 py-4 md:py-6 rounded-2xl flex items-center justify-center gap-2 font-semibold transition-all hover:bg-indigo-50/50 md:text-lg"
-            >
-              <PlusCircle size={20} className="md:w-6 md:h-6" /> Add New Section
-            </button>
+          <div className="px-4 md:px-8 py-6 space-y-6">
+            {sections.map((section) => (
+              <div key={section.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 md:p-6 shadow-sm relative group" onClick={e => e.stopPropagation()}>
+                {/* Section Header */}
+                <div className="flex justify-between items-center mb-4">
+                  <input
+                    value={section.name}
+                    onChange={(e) => updateSectionName(section.id, e.target.value)}
+                    className="font-bold text-slate-800 text-lg md:text-xl bg-transparent outline-none w-32 md:w-48 focus:border-b-2 focus:border-indigo-500 transition-colors"
+                  />
+
+                  <button
+                    onClick={() => addRow(section.id)}
+                    className="text-indigo-600 bg-indigo-100 hover:bg-indigo-200 px-3 py-1.5 rounded-lg text-sm md:text-base font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                  >
+                    <Plus size={16} strokeWidth={3} /> Add Row
+                  </button>
+                </div>
+
+                {/* Grid of Boxes */}
+                <div className="space-y-3 md:space-y-4">
+                  {section.rows.map((row, rIndex) => (
+                    <div key={rIndex} className="flex gap-2 md:gap-4 items-center relative w-full">
+                      <div className="grid grid-cols-4 gap-2 md:gap-4 flex-1">
+                        {row.map((cell, cIndex) => {
+                          const isActive = activeCell?.sec === section.id && activeCell?.r === rIndex && activeCell?.c === cIndex;
+                          return (
+                            <div key={cIndex} className="relative w-full aspect-square sm:aspect-auto sm:h-24 md:h-28">
+                              <div className={`absolute inset-0 w-full h-full flex items-center justify-between px-2 md:px-4 rounded-xl border-2 transition-all shadow-inner bg-white ${isActive ? 'border-indigo-500 ring-4 ring-indigo-500/20' : 'border-slate-200 focus-within:border-indigo-400'}`}>
+
+                                {/* Left Repeat Bracket */}
+                                <div className="w-3 md:w-5 flex justify-center shrink-0">
+                                  {cell.repeatStart && <span className="text-xl sm:text-2xl md:text-4xl font-extrabold text-slate-800 select-none">[</span>}
+                                </div>
+
+                                <input
+                                  value={cell.chord}
+                                  onFocus={() => setActiveCell({ sec: section.id, r: rIndex, c: cIndex })}
+                                  onChange={(e) => updateChord(section.id, rIndex, cIndex, e.target.value)}
+                                  className={`flex-1 w-full min-w-0 text-center text-xl sm:text-2xl md:text-3xl font-black outline-none bg-transparent ${isActive ? 'text-indigo-700' : 'text-slate-700'} placeholder:text-slate-300 placeholder:font-normal`}
+                                  maxLength={7}
+                                  placeholder="-"
+                                />
+
+                                {/* Right Repeat Bracket */}
+                                <div className="w-3 md:w-5 flex justify-center shrink-0">
+                                  {cell.repeatEnd && <span className="text-xl sm:text-2xl md:text-4xl font-extrabold text-slate-800 select-none">]</span>}
+                                </div>
+
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Delete Row Button */}
+                      <div className="w-8 md:w-10 flex justify-center shrink-0">
+                        {section.rows.length > 1 ? (
+                          <button
+                            onClick={() => removeRow(section.id, rIndex)}
+                            className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 md:p-3 rounded-full transition-colors"
+                            title="Delete Row"
+                          >
+                            <Trash2 size={20} className="md:w-6 md:h-6" />
+                          </button>
+                        ) : (
+                          <div className="w-8 md:w-10"></div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {/* Add Section Button */}
+            <div className="pt-2 md:pt-4" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={addNewSection}
+                className="w-full border-2 border-dashed border-slate-300 hover:border-indigo-400 text-slate-500 hover:text-indigo-600 py-4 md:py-6 rounded-2xl flex items-center justify-center gap-2 font-semibold transition-all hover:bg-indigo-50/50 md:text-lg"
+              >
+                <PlusCircle size={20} className="md:w-6 md:h-6" /> Add New Section
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Chord Suggestions Floating Bar */}
+        {/* Floating Bar with Chords & Repeat Controls */}
         {activeCell && (
           <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-10px_40px_rgba(0,0,0,0.15)] z-50 p-3 pb-6 sm:pb-3 animate-in slide-in-from-bottom-6 duration-300 rounded-b-[2rem] sm:rounded-b-[1.5rem]">
             <div className="flex items-center justify-between mb-3 px-1 md:px-4">
@@ -308,65 +398,108 @@ export default function App() {
               </button>
             </div>
 
-            <div className="flex overflow-x-auto gap-2.5 pb-2 md:px-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              {currentSuggestions.map(chord => (
+            <div className="flex items-center">
+              <div className="flex flex-1 overflow-x-auto gap-2.5 pb-2 md:px-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                {currentSuggestions.map(chord => (
+                  <button
+                    key={chord}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      if (activeCell) updateChord(activeCell.sec, activeCell.r, activeCell.c, chord);
+                    }}
+                    className="shrink-0 bg-white border-2 border-indigo-100 text-indigo-700 font-extrabold px-5 py-3 md:px-8 md:py-4 md:text-xl rounded-xl hover:bg-indigo-50 hover:border-indigo-300 active:scale-95 transition-all text-lg shadow-sm"
+                  >
+                    {chord}
+                  </button>
+                ))}
+              </div>
+
+              {/* Repeat Syntax Toggles */}
+              <div className="flex gap-2 pl-3 ml-3 border-l-2 border-indigo-100 shrink-0 self-start">
                 <button
-                  key={chord}
                   onMouseDown={(e) => {
-                    e.preventDefault(); 
-                    if (activeCell) updateChord(activeCell.sec, activeCell.r, activeCell.c, chord);
+                    e.preventDefault();
+                    toggleRepeat(activeCell.sec, activeCell.r, activeCell.c, 'repeatStart');
                   }}
-                  className="shrink-0 bg-white border-2 border-indigo-100 text-indigo-700 font-extrabold px-5 py-3 md:px-8 md:py-4 md:text-xl rounded-xl hover:bg-indigo-50 hover:border-indigo-300 active:scale-95 transition-all text-lg shadow-sm"
+                  className={`border-2 font-extrabold px-4 py-3 md:py-4 rounded-xl transition-all text-xl shadow-sm ${getActiveCellData()?.repeatStart ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-100 hover:bg-indigo-50'}`}
+                  title="Toggle start repeat bracket"
                 >
-                  {chord}
+                  [
                 </button>
-              ))}
+                <button
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    toggleRepeat(activeCell.sec, activeCell.r, activeCell.c, 'repeatEnd');
+                  }}
+                  className={`border-2 font-extrabold px-4 py-3 md:py-4 rounded-xl transition-all text-xl shadow-sm ${getActiveCellData()?.repeatEnd ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-100 hover:bg-indigo-50'}`}
+                  title="Toggle end repeat bracket"
+                >
+                  ]
+                </button>
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* A4 Print Container - Visible dynamically to ensure valid rendering bounds */}
-      <div 
+      {/* A4 Print Container - Dynamic scaling to fit all content on A4 visually */}
+      <div
         className="absolute top-0 left-0 w-full flex justify-center pb-20"
-        style={{ 
-          opacity: isCapturing ? 1 : 0, 
-          pointerEvents: 'none', 
+        style={{
+          opacity: isCapturing ? 1 : 0,
+          pointerEvents: 'none',
           zIndex: isCapturing ? 50 : -50,
           visibility: isCapturing ? 'visible' : 'hidden'
         }}
       >
-        <div 
-          ref={printRef} 
+        <div
+          ref={printRef}
           className="flex flex-col"
-          style={{ width: '794px', minHeight: '1123px', padding: '60px 40px', boxSizing: 'border-box', backgroundColor: '#ffffff' }}
+          style={{ width: '794px', height: '1123px', padding: '24px 32px', boxSizing: 'border-box', backgroundColor: '#ffffff', overflow: 'hidden' }}
         >
           {/* Print Header */}
-          <div className="text-center mb-10 border-b-2 pb-8" style={{ borderColor: '#e2e8f0' }}>
-            <h1 className="text-5xl font-extrabold mb-3" style={{ color: '#1e293b', fontFamily: 'sans-serif' }}>{songName || 'Untitled Song'}</h1>
-            {songScale && <p className="text-2xl font-semibold" style={{ color: '#64748b', fontFamily: 'sans-serif' }}>Key: {songScale}</p>}
+          <div className="text-center border-b-2" style={{ borderColor: '#e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
+            <h1 className="font-extrabold mb-1" style={{ color: '#1e293b', fontFamily: 'sans-serif', fontSize: '24px', lineHeight: '1.2', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '0 20px' }}>{songName || 'Untitled Song'}</h1>
+            <div className="flex items-center justify-center gap-6">
+              {songScale && <p className="font-semibold" style={{ color: '#64748b', fontFamily: 'sans-serif', fontSize: '16px' }}>Key: {songScale}</p>}
+              {timeSignature && <p className="font-semibold" style={{ color: '#64748b', fontFamily: 'sans-serif', fontSize: '16px' }}>Time: {timeSignature}</p>}
+            </div>
           </div>
 
           {/* Print Chords Content */}
-          <div className="space-y-10 flex-1">
+          <div className="flex-1" style={{ gap: printMb, display: 'flex', flexDirection: 'column' }}>
             {sections.map((section) => {
-              // Only print sections that have at least one chord
-              const hasChords = section.rows.some(row => row.some(chord => chord.trim() !== ''));
+              const hasChords = section.rows.some(row => row.some(cell => cell.chord?.trim() !== ''));
               if (!hasChords) return null;
 
               return (
-                <div key={section.id} className="mb-8 page-break-inside-avoid">
-                  <h2 className="text-3xl font-bold mb-5" style={{ color: '#334155', fontFamily: 'sans-serif' }}>{section.name}</h2>
-                  <div className="space-y-3">
+                <div key={section.id} className="page-break-inside-avoid">
+                  <h2 className="font-bold" style={{ color: '#334155', fontFamily: 'sans-serif', fontSize: '18px', marginBottom: '8px' }}>{section.name}</h2>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: printGap }}>
                     {section.rows.map((row, rIndex) => (
-                      <div key={rIndex} className="grid grid-cols-4 gap-4">
-                        {row.map((chord, cIndex) => (
-                          <div 
-                            key={cIndex} 
-                            className="border-2 rounded-xl h-24 flex items-center justify-center text-4xl font-extrabold"
-                            style={{ backgroundColor: '#f8fafc', borderColor: '#cbd5e1', color: '#1e293b', fontFamily: 'sans-serif' }}
+                      <div key={rIndex} className="grid grid-cols-4" style={{ gap: '16px' }}>
+                        {row.map((cell, cIndex) => (
+                          <div
+                            key={cIndex}
+                            className="border-2 rounded-xl flex items-center justify-between"
+                            style={{
+                              backgroundColor: '#f8fafc',
+                              borderColor: '#cbd5e1',
+                              height: printBoxHeight,
+                              padding: '0 16px'
+                            }}
                           >
-                            {chord || ''}
+                            {/* Left Bracket */}
+                            <span style={{ fontSize: printTextSize, fontWeight: 900, color: '#1e293b', fontFamily: 'sans-serif', visibility: cell.repeatStart ? 'visible' : 'hidden' }}>[</span>
+
+                            {/* Chord Text */}
+                            <span style={{ fontSize: printTextSize, fontWeight: 800, color: '#1e293b', fontFamily: 'sans-serif' }}>
+                              {cell.chord || ''}
+                            </span>
+
+                            {/* Right Bracket */}
+                            <span style={{ fontSize: printTextSize, fontWeight: 900, color: '#1e293b', fontFamily: 'sans-serif', visibility: cell.repeatEnd ? 'visible' : 'hidden' }}>]</span>
                           </div>
                         ))}
                       </div>
@@ -377,8 +510,7 @@ export default function App() {
             })}
           </div>
 
-          {/* Footer */}
-          <div className="mt-12 text-center font-medium text-lg" style={{ color: '#94a3b8', fontFamily: 'sans-serif' }}>
+          <div className="text-center font-medium" style={{ color: '#94a3b8', fontFamily: 'sans-serif', fontSize: '14px', marginTop: 'auto', paddingTop: '20px' }}>
             Created with ChordBox
           </div>
         </div>
