@@ -487,29 +487,39 @@ export default function App() {
                         {row.map((cell, cIndex) => (
                           <div
                             key={cIndex}
-                            className="border-2 rounded-xl flex items-center justify-between"
-                            style={{
-                              backgroundColor: '#f8fafc',
-                              borderColor: '#cbd5e1',
-                              height: printBoxHeight,
-                              padding: '0 16px'
+                            className="border-2 rounded-xl relative"
+                            style={{ 
+                              backgroundColor: '#f8fafc', 
+                              borderColor: '#cbd5e1', 
+                              height: printBoxHeight
                             }}
                           >
                             {/* Left Bracket */}
-                            <span style={{ fontSize: printTextSize, fontWeight: 900, color: '#1e293b', fontFamily: 'sans-serif', visibility: cell.repeatStart ? 'visible' : 'hidden' }}>[</span>
+                            {cell.repeatStart && (
+                              <div className="absolute left-2 md:left-4 inset-y-0 flex items-center">
+                                <span style={{ fontSize: printTextSize, fontWeight: 900, color: '#1e293b', fontFamily: 'sans-serif' }}>[</span>
+                              </div>
+                            )}
 
-                            {/* Chord Text safely scaled without artificial bounding boxes */}
-                            <span style={{ 
-                              fontSize: printTextSize, 
-                              fontWeight: 800, 
-                              color: '#1e293b', 
-                              fontFamily: 'sans-serif'
-                            }}>
-                              {cell.chord ? cell.chord.trim() : ''}
-                            </span>
+                            {/* Chord Text explicitly centered absolutely */}
+                            <div className="absolute inset-0 flex items-center justify-center px-1">
+                              <span style={{ 
+                                fontSize: printTextSize, 
+                                fontWeight: 800, 
+                                color: '#1e293b', 
+                                fontFamily: 'sans-serif',
+                                whiteSpace: 'nowrap'
+                              }}>
+                                {cell.chord ? cell.chord.trim() : ''}
+                              </span>
+                            </div>
 
                             {/* Right Bracket */}
-                            <span style={{ fontSize: printTextSize, fontWeight: 900, color: '#1e293b', fontFamily: 'sans-serif', visibility: cell.repeatEnd ? 'visible' : 'hidden' }}>]</span>
+                            {cell.repeatEnd && (
+                              <div className="absolute right-2 md:right-4 inset-y-0 flex items-center">
+                                <span style={{ fontSize: printTextSize, fontWeight: 900, color: '#1e293b', fontFamily: 'sans-serif' }}>]</span>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
