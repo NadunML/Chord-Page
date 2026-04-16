@@ -222,7 +222,8 @@ export default function App() {
   calculatedBoxHeight = Math.max(12, Math.min(72, calculatedBoxHeight));
 
   const printBoxHeight = `${calculatedBoxHeight}px`;
-  const printTextSize = `${Math.max(10, Math.floor(calculatedBoxHeight * 0.45))}px`;
+  // Cap the text size absolutely to a safe maximum so it never physically approaches container limits.
+  const printTextSize = `${Math.max(10, Math.min(28, Math.floor(calculatedBoxHeight * 0.45)))}px`;
   // Vertical column gap
   const printGap = `${Math.max(4, Math.floor(idealTotalRowSpace * 0.15))}px`;
   // Margins between sections
@@ -321,26 +322,30 @@ export default function App() {
                           const isActive = activeCell?.sec === section.id && activeCell?.r === rIndex && activeCell?.c === cIndex;
                           return (
                             <div key={cIndex} className="relative w-full aspect-square sm:aspect-auto sm:h-24 md:h-28">
-                              <div className={`absolute inset-0 w-full h-full flex items-center justify-between px-2 md:px-4 rounded-xl border-2 transition-all shadow-inner bg-white ${isActive ? 'border-indigo-500 ring-4 ring-indigo-500/20' : 'border-slate-200 focus-within:border-indigo-400'}`}>
+                              <div className={`absolute inset-0 w-full h-full flex items-center justify-between px-1 md:px-4 rounded-xl border-2 transition-all shadow-inner bg-white ${isActive ? 'border-indigo-500 ring-4 ring-indigo-500/20' : 'border-slate-200 focus-within:border-indigo-400'}`}>
 
                                 {/* Left Repeat Bracket */}
-                                <div className="w-3 md:w-5 flex justify-center shrink-0">
-                                  {cell.repeatStart && <span className="text-xl sm:text-2xl md:text-4xl font-extrabold text-slate-800 select-none">[</span>}
-                                </div>
+                                {cell.repeatStart && (
+                                  <div className="flex justify-center shrink-0 pr-1 md:pr-2">
+                                    <span className="text-lg sm:text-2xl md:text-4xl font-extrabold text-slate-800 select-none">[</span>
+                                  </div>
+                                )}
 
                                 <input
                                   value={cell.chord}
                                   onFocus={() => setActiveCell({ sec: section.id, r: rIndex, c: cIndex })}
                                   onChange={(e) => updateChord(section.id, rIndex, cIndex, e.target.value)}
-                                  className={`flex-1 w-full min-w-0 text-center text-xl sm:text-2xl md:text-3xl font-black outline-none bg-transparent ${isActive ? 'text-indigo-700' : 'text-slate-700'} placeholder:text-slate-300 placeholder:font-normal`}
+                                  className={`flex-1 w-full min-w-0 px-0 text-center text-[17px] sm:text-2xl md:text-3xl font-black outline-none bg-transparent ${isActive ? 'text-indigo-700' : 'text-slate-700'} placeholder:text-slate-300 placeholder:font-normal`}
                                   maxLength={7}
                                   placeholder="-"
                                 />
 
                                 {/* Right Repeat Bracket */}
-                                <div className="w-3 md:w-5 flex justify-center shrink-0">
-                                  {cell.repeatEnd && <span className="text-xl sm:text-2xl md:text-4xl font-extrabold text-slate-800 select-none">]</span>}
-                                </div>
+                                {cell.repeatEnd && (
+                                  <div className="flex justify-center shrink-0 pl-1 md:pl-2">
+                                    <span className="text-lg sm:text-2xl md:text-4xl font-extrabold text-slate-800 select-none">]</span>
+                                  </div>
+                                )}
 
                               </div>
                             </div>
@@ -493,9 +498,14 @@ export default function App() {
                             {/* Left Bracket */}
                             <span style={{ fontSize: printTextSize, fontWeight: 900, color: '#1e293b', fontFamily: 'sans-serif', visibility: cell.repeatStart ? 'visible' : 'hidden' }}>[</span>
 
-                            {/* Chord Text */}
-                            <span style={{ fontSize: printTextSize, fontWeight: 800, color: '#1e293b', fontFamily: 'sans-serif' }}>
-                              {cell.chord || ''}
+                            {/* Chord Text safely scaled without artificial bounding boxes */}
+                            <span style={{ 
+                              fontSize: printTextSize, 
+                              fontWeight: 800, 
+                              color: '#1e293b', 
+                              fontFamily: 'sans-serif'
+                            }}>
+                              {cell.chord ? cell.chord.trim() : ''}
                             </span>
 
                             {/* Right Bracket */}
