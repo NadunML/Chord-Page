@@ -73,6 +73,10 @@ export default function App() {
   const [isCapturing, setIsCapturing] = useState(false);
   const printRef = useRef(null);
 
+  const [transposeCount, setTransposeCount] = useState(() => {
+    return parseInt(localStorage.getItem('chordBox_transpose') || '0', 10);
+  });
+
   // Sync states to local storage
   useEffect(() => {
     localStorage.setItem('chordBox_songName', songName);
@@ -89,6 +93,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('chordBox_sections', JSON.stringify(sections));
   }, [sections]);
+
+  useEffect(() => {
+    localStorage.setItem('chordBox_transpose', transposeCount.toString());
+  }, [transposeCount]);
 
   const updateChord = (sectionId, rowIndex, colIndex, value) => {
     setSections(prev => prev.map(sec => {
@@ -135,6 +143,27 @@ export default function App() {
     }));
   };
 
+  const removeCell = (sectionId, rowIndex, colIndex) => {
+    setSections(prev => prev.map(sec => {
+      if (sec.id !== sectionId) return sec;
+      const newRows = [...sec.rows];
+      newRows[rowIndex] = newRows[rowIndex].filter((_, i) => i !== colIndex);
+      if (newRows[rowIndex].length === 0) {
+        newRows[rowIndex] = [emptyCell()];
+      }
+      return { ...sec, rows: newRows };
+    }));
+  };
+
+  const addCell = (sectionId, rowIndex) => {
+    setSections(prev => prev.map(sec => {
+      if (sec.id !== sectionId) return sec;
+      const newRows = [...sec.rows];
+      newRows[rowIndex] = [...newRows[rowIndex], emptyCell()];
+      return { ...sec, rows: newRows };
+    }));
+  };
+
   const updateSectionName = (sectionId, newName) => {
     setSections(prev => prev.map(sec => {
       if (sec.id !== sectionId) return sec;
@@ -154,8 +183,61 @@ export default function App() {
       setSongScale('');
       setTimeSignature('');
       setSections(defaultSections);
+      setTransposeCount(0);
       toast.success("All fields have been cleared!");
     }
+  };
+
+  const handleTranspose = (steps) => {
+    const NOTE_TO_INDEX = {
+      'C': 0, 'B#': 0,
+      'C#': 1, 'Db': 1,
+      'D': 2,
+      'D#': 3, 'Eb': 3,
+      'E': 4, 'Fb': 4,
+      'F': 5, 'E#': 5,
+      'F#': 6, 'Gb': 6,
+      'G': 7,
+      'G#': 8, 'Ab': 8,
+      'A': 9,
+      'A#': 10, 'Bb': 10,
+      'B': 11, 'Cb': 11
+    };
+    const INDEX_TO_NOTE = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+    if (songScale) {
+      const match = songScale.match(/^([A-G][b#]?)(.*)$/);
+      if (match) {
+        let index = NOTE_TO_INDEX[match[1]];
+        if (index !== undefined) {
+          let newIndex = (index + steps) % 12;
+          if (newIndex < 0) newIndex += 12;
+          setSongScale(INDEX_TO_NOTE[newIndex] + match[2]);
+        }
+      }
+    }
+
+    setSections(prev => prev.map(sec => ({
+      ...sec,
+      rows: sec.rows.map(row => row.map(cell => {
+        if (!cell.chord) return cell;
+
+        const newChord = cell.chord.split('/').map(part => {
+          const m = part.trim().match(/^([A-G][b#]?)(.*)$/);
+          if (!m) return part;
+          let index = NOTE_TO_INDEX[m[1]];
+          if (index === undefined) return part;
+          
+          let newIndex = (index + steps) % 12;
+          if (newIndex < 0) newIndex += 12;
+          return INDEX_TO_NOTE[newIndex] + m[2];
+        }).join('/');
+
+        return { ...cell, chord: newChord };
+      }))
+    })));
+
+    setTransposeCount(prev => prev + steps);
   };
 
   const handleSave = async () => {
@@ -268,11 +350,11 @@ export default function App() {
                 className="flex-1 bg-black/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder:text-white/60 focus:outline-none focus:bg-white/20 focus:border-white/40 transition-all font-medium text-lg shadow-inner min-w-0"
               />
 
-              <div className="flex gap-2 shrink-0">
+              <div className="flex flex-row gap-2 shrink-0 overflow-x-auto pb-1 md:pb-0" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 <select
                   value={songScale}
                   onChange={(e) => setSongScale(e.target.value)}
-                  className="flex-1 md:w-28 bg-black/10 border border-white/20 rounded-xl px-2 py-3 text-white focus:outline-none focus:bg-white/20 focus:border-white/40 transition-all font-bold text-lg shadow-inner appearance-none text-center cursor-pointer h-full"
+                  className="shrink-0 w-[4.5rem] md:w-24 bg-black/10 border border-white/20 rounded-xl px-2 py-3 text-white focus:outline-none focus:bg-white/20 focus:border-white/40 transition-all font-bold text-base md:text-lg shadow-inner appearance-none text-center cursor-pointer"
                 >
                   <option value="" className="text-slate-800 font-normal">Key</option>
                   {Object.keys(scaleChords).map(k => (
@@ -283,13 +365,35 @@ export default function App() {
                 <select
                   value={timeSignature}
                   onChange={(e) => setTimeSignature(e.target.value)}
-                  className="flex-1 md:w-24 bg-black/10 border border-white/20 rounded-xl px-2 py-3 text-white focus:outline-none focus:bg-white/20 focus:border-white/40 transition-all font-bold text-lg shadow-inner appearance-none text-center cursor-pointer h-full"
+                  className="shrink-0 w-[4.5rem] md:w-20 bg-black/10 border border-white/20 rounded-xl px-2 py-3 text-white focus:outline-none focus:bg-white/20 focus:border-white/40 transition-all font-bold text-base md:text-lg shadow-inner appearance-none text-center cursor-pointer"
                 >
                   <option value="" className="text-slate-800 font-normal">Time</option>
                   {['2/4', '3/4', '4/4', '6/8'].map(k => (
                     <option key={k} value={k} className="text-slate-800 font-bold">{k}</option>
                   ))}
                 </select>
+
+                {/* Transpose Controls */}
+                <div className="shrink-0 flex items-stretch bg-black/10 border border-white/20 rounded-xl text-white shadow-inner">
+                  <button 
+                    onClick={() => handleTranspose(-1)} 
+                    disabled={isCapturing}
+                    className="px-3 md:px-4 hover:bg-white/20 rounded-l-xl transition-colors font-bold text-2xl flex items-center justify-center disabled:opacity-50"
+                  >
+                    <span className="-mt-1">-</span>
+                  </button>
+                  <div className="flex flex-col items-center justify-center min-w-[3.5rem] px-1 pointer-events-none border-x border-white/10">
+                    <span className="text-[10px] text-white/70 uppercase font-bold tracking-wider mb-0.5" style={{ fontSize: '9px' }}>Transp</span>
+                    <span className="font-bold text-sm leading-none">{transposeCount > 0 ? `+${transposeCount}` : transposeCount}</span>
+                  </div>
+                  <button 
+                    onClick={() => handleTranspose(1)} 
+                    disabled={isCapturing}
+                    className="px-3 md:px-4 hover:bg-white/20 rounded-r-xl transition-colors font-bold text-xl flex items-center justify-center disabled:opacity-50"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </div>
           </header>
@@ -317,11 +421,11 @@ export default function App() {
                 <div className="space-y-3 md:space-y-4">
                   {section.rows.map((row, rIndex) => (
                     <div key={rIndex} className="flex gap-2 md:gap-4 items-center relative w-full">
-                      <div className="grid grid-cols-4 gap-2 md:gap-4 flex-1">
+                      <div className="grid gap-2 md:gap-4 flex-1" style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}>
                         {row.map((cell, cIndex) => {
                           const isActive = activeCell?.sec === section.id && activeCell?.r === rIndex && activeCell?.c === cIndex;
                           return (
-                            <div key={cIndex} className="relative w-full aspect-square sm:aspect-auto sm:h-24 md:h-28">
+                            <div key={cIndex} className="relative w-full aspect-square sm:aspect-auto sm:h-24 md:h-28 group/cell">
                               <div className={`absolute inset-0 w-full h-full flex items-center justify-between px-1 md:px-4 rounded-xl border-2 transition-all shadow-inner bg-white ${isActive ? 'border-indigo-500 ring-4 ring-indigo-500/20' : 'border-slate-200 focus-within:border-indigo-400'}`}>
 
                                 {/* Left Repeat Bracket */}
@@ -348,23 +452,45 @@ export default function App() {
                                 )}
 
                               </div>
+                              
+                              {/* Remove Cell Button */}
+                              {row.length > 1 && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeCell(section.id, rIndex, cIndex);
+                                  }}
+                                  className="absolute -top-2 -right-2 bg-red-100 hover:bg-red-500 text-red-500 hover:text-white rounded-full p-1 opacity-100 md:opacity-0 md:group-hover/cell:opacity-100 transition-all z-10 shadow-sm border border-white"
+                                  title="Remove Box"
+                                >
+                                  <X size={12} strokeWidth={3} />
+                                </button>
+                              )}
                             </div>
                           );
                         })}
                       </div>
 
-                      {/* Delete Row Button */}
-                      <div className="w-8 md:w-10 flex justify-center shrink-0">
+                      {/* Row Actions */}
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <button
+                          onClick={() => addCell(section.id, rIndex)}
+                          className="text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 p-1.5 md:p-2 rounded-full transition-colors flex justify-center"
+                          title="Add Box to Row"
+                        >
+                          <Plus size={18} className="md:w-5 md:h-5" />
+                        </button>
+                        
                         {section.rows.length > 1 ? (
                           <button
                             onClick={() => removeRow(section.id, rIndex)}
-                            className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 md:p-3 rounded-full transition-colors"
+                            className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 md:p-2 rounded-full transition-colors flex justify-center"
                             title="Delete Row"
                           >
-                            <Trash2 size={20} className="md:w-6 md:h-6" />
+                            <Trash2 size={18} className="md:w-5 md:h-5" />
                           </button>
                         ) : (
-                          <div className="w-8 md:w-10"></div>
+                          <div className="h-[30px] md:h-[36px]"></div>
                         )}
                       </div>
                     </div>
@@ -483,7 +609,7 @@ export default function App() {
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: printGap }}>
                     {section.rows.map((row, rIndex) => (
-                      <div key={rIndex} className="grid grid-cols-4" style={{ gap: '16px' }}>
+                      <div key={rIndex} className="grid" style={{ gap: '16px', gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}>
                         {row.map((cell, cIndex) => (
                           <div
                             key={cIndex}
@@ -510,7 +636,7 @@ export default function App() {
                                 fontFamily: 'sans-serif',
                                 whiteSpace: 'nowrap'
                               }}>
-                                {cell.chord ? cell.chord.trim() : ''}
+                                {cell.chord && cell.chord.trim() !== '' ? cell.chord.trim() : '-'}
                               </span>
                             </div>
 
