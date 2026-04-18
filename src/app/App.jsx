@@ -421,7 +421,7 @@ export default function App() {
                 <div className="space-y-3 md:space-y-4">
                   {section.rows.map((row, rIndex) => (
                     <div key={rIndex} className="flex gap-2 md:gap-4 items-center relative w-full">
-                      <div className="grid gap-2 md:gap-4 flex-1" style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}>
+                      <div className="grid grid-cols-4 gap-2 md:gap-4 flex-1">
                         {row.map((cell, cIndex) => {
                           const isActive = activeCell?.sec === section.id && activeCell?.r === rIndex && activeCell?.c === cIndex;
                           return (
@@ -609,7 +609,7 @@ export default function App() {
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: printGap }}>
                     {section.rows.map((row, rIndex) => (
-                      <div key={rIndex} className="grid" style={{ gap: '16px', gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}>
+                      <div key={rIndex} className="grid grid-cols-4" style={{ gap: '16px' }}>
                         {row.map((cell, cIndex) => (
                           <div
                             key={cIndex}
