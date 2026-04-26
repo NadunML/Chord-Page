@@ -293,23 +293,26 @@ export default function App() {
     return acc + (hasChords ? sec.rows.length : 0);
   }, 0);
 
-  // A4 exact bounds calculation (Strict 1123px constraint math)
-  // Header + Footer footprint minimized drastically: 1123 - (Top/Bot paddings 48px) - (Header 80px) - (Footer 30px) = 965px raw available. We use 940 for safety.
-  // Section titles: 18px font + 8px margin = ~30px vertical footprint.
-  const availableHeight = 940 - (numValidSecs * 30);
-  const idealTotalRowSpace = availableHeight / (numValidRows || 1);
-
-  // Calculate Box Height dynamically leaving room for gaps. Max 75% of space goes to box, 25% to gaps.
-  let calculatedBoxHeight = Math.floor(idealTotalRowSpace * 0.75);
-  calculatedBoxHeight = Math.max(12, Math.min(72, calculatedBoxHeight));
+  const printGapValue = 8;
+  const printMbValue = 24;
+  
+  const numGapsBetweenRows = Math.max(0, numValidRows - numValidSecs);
+  const numGapsBetweenSections = Math.max(0, numValidSecs - 1);
+  
+  const fixedSpace = (numValidSecs * 30) + (numGapsBetweenSections * printMbValue) + (numGapsBetweenRows * printGapValue);
+  
+  // Available height for just the boxes (950 is safe space from 1123 A4 height minus header/footer)
+  const availableForBoxes = Math.max(100, 950 - fixedSpace);
+  
+  let calculatedBoxHeight = Math.floor(availableForBoxes / (numValidRows || 1));
+  calculatedBoxHeight = Math.max(12, Math.min(90, calculatedBoxHeight));
 
   const printBoxHeight = `${calculatedBoxHeight}px`;
-  // Cap the text size absolutely to a safe maximum so it never physically approaches container limits.
-  const printTextSize = `${Math.max(10, Math.min(28, Math.floor(calculatedBoxHeight * 0.45)))}px`;
-  // Vertical column gap
-  const printGap = `${Math.max(4, Math.floor(idealTotalRowSpace * 0.15))}px`;
-  // Margins between sections
-  const printMb = `${Math.max(12, Math.floor(idealTotalRowSpace * 0.3))}px`;
+  // Make text size bigger relative to the box (0.55 multiplier instead of 0.45)
+  const printTextSize = `${Math.max(12, Math.min(48, Math.floor(calculatedBoxHeight * 0.55)))}px`;
+  
+  const printGap = `${printGapValue}px`;
+  const printMb = `${printMbValue}px`;
 
   return (
     <div className="min-h-screen bg-slate-100 flex justify-center font-sans sm:py-6 relative">
@@ -575,18 +578,20 @@ export default function App() {
 
       {/* A4 Print Container - Dynamic scaling to fit all content on A4 visually */}
       <div
-        className="absolute top-0 left-0 w-full flex justify-center pb-20"
+        className="fixed top-0 left-0"
         style={{
           opacity: isCapturing ? 1 : 0,
           pointerEvents: 'none',
           zIndex: isCapturing ? 50 : -50,
-          visibility: isCapturing ? 'visible' : 'hidden'
+          visibility: isCapturing ? 'visible' : 'hidden',
+          width: '794px',
+          height: '1123px'
         }}
       >
         <div
           ref={printRef}
           className="flex flex-col"
-          style={{ width: '794px', height: '1123px', padding: '24px 32px', boxSizing: 'border-box', backgroundColor: '#ffffff', overflow: 'hidden' }}
+          style={{ width: '794px', height: '1123px', padding: '24px 32px', boxSizing: 'border-box', backgroundColor: '#ffffff', overflow: 'hidden', WebkitTextSizeAdjust: '100%' }}
         >
           {/* Print Header */}
           <div className="text-center border-b-2" style={{ borderColor: '#e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
@@ -622,7 +627,7 @@ export default function App() {
                           >
                             {/* Left Bracket */}
                             {cell.repeatStart && (
-                              <div className="absolute left-2 md:left-4 inset-y-0 flex items-center">
+                              <div className="absolute left-4 inset-y-0 flex items-center">
                                 <span style={{ fontSize: printTextSize, fontWeight: 900, color: '#1e293b', fontFamily: 'sans-serif' }}>[</span>
                               </div>
                             )}
@@ -642,7 +647,7 @@ export default function App() {
 
                             {/* Right Bracket */}
                             {cell.repeatEnd && (
-                              <div className="absolute right-2 md:right-4 inset-y-0 flex items-center">
+                              <div className="absolute right-4 inset-y-0 flex items-center">
                                 <span style={{ fontSize: printTextSize, fontWeight: 900, color: '#1e293b', fontFamily: 'sans-serif' }}>]</span>
                               </div>
                             )}
